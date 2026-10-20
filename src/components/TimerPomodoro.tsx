@@ -46,7 +46,10 @@ export const TimerPomodoro: React.FC<TimerPomodoroProps> = ({ isNight, t }) => {
   const [remainingMs, setRemainingMs] = useState<number>(25 * 60 * 1000);
 
   const requestRef = useRef<number | null>(null);
+  const intervalRef = useRef<number | null>(null);
   const endTimeRef = useRef<number>(0);
+  const remainingMsRef = useRef<number>(remainingMs);
+  remainingMsRef.current = remainingMs;
   const lastSecondTickedRef = useRef<number | null>(null);
 
   const getCurrentPhaseDurationMs = (p: PomodoroPhase) => {
@@ -132,11 +135,12 @@ export const TimerPomodoro: React.FC<TimerPomodoroProps> = ({ isNight, t }) => {
 
   useEffect(() => {
     if (isRunning) {
-      endTimeRef.current = performance.now() + remainingMs;
+      endTimeRef.current = performance.now() + remainingMsRef.current;
 
       const tick = () => {
         const now = performance.now();
         const diff = Math.max(0, endTimeRef.current - now);
+        remainingMsRef.current = diff;
         setRemainingMs(diff);
 
         const currentWholeSeconds = Math.ceil(diff / 1000);
@@ -158,14 +162,19 @@ export const TimerPomodoro: React.FC<TimerPomodoroProps> = ({ isNight, t }) => {
       };
 
       requestRef.current = requestAnimationFrame(tick);
+      // Fallback interval for background tabs to keep ticking and updating document.title every second!
+      intervalRef.current = window.setInterval(tick, 250);
     } else {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     }
 
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isRunning, remainingMs, phase, currentRound, currentCycle, config]);
+  }, [isRunning, phase, currentRound, currentCycle, config]);
+
 
   const handleStartPause = () => {
     if (isCompleted) {

@@ -14,29 +14,39 @@ export const Stopwatch: React.FC<StopwatchProps> = ({ isNight, t }) => {
   const [laps, setLaps] = useState<LapRecord[]>([]);
 
   const requestRef = useRef<number | null>(null);
+  const intervalRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
+  const pausedElapsedRef = useRef<number>(0);
 
   useEffect(() => {
     if (isRunning) {
-      startTimeRef.current = performance.now() - elapsedTime;
+      startTimeRef.current = performance.now() - pausedElapsedRef.current;
 
       const update = () => {
         const now = performance.now();
-        setElapsedTime(now - startTimeRef.current);
+        const elapsed = now - startTimeRef.current;
+        pausedElapsedRef.current = elapsed;
+        setElapsedTime(elapsed);
         requestRef.current = requestAnimationFrame(update);
       };
 
       requestRef.current = requestAnimationFrame(update);
+
+      // Runs in background tabs when requestAnimationFrame is throttled/paused by the browser
+      intervalRef.current = window.setInterval(() => {
+        const now = performance.now();
+        const elapsed = now - startTimeRef.current;
+        pausedElapsedRef.current = elapsed;
+        setElapsedTime(elapsed);
+      }, 250);
     } else {
-      if (requestRef.current) {
-        cancelAnimationFrame(requestRef.current);
-      }
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     }
 
     return () => {
-      if (requestRef.current) {
-        cancelAnimationFrame(requestRef.current);
-      }
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [isRunning]);
 
@@ -46,9 +56,11 @@ export const Stopwatch: React.FC<StopwatchProps> = ({ isNight, t }) => {
 
   const handleReset = () => {
     setIsRunning(false);
+    pausedElapsedRef.current = 0;
     setElapsedTime(0);
     setLaps([]);
   };
+
 
   const handleLap = () => {
     if (elapsedTime === 0) return;

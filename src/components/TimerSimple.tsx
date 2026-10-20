@@ -17,7 +17,10 @@ export const TimerSimple: React.FC<TimerSimpleProps> = ({ isNight, t }) => {
   const [sliderMinutes, setSliderMinutes] = useState<number>(15);
 
   const requestRef = useRef<number | null>(null);
+  const intervalRef = useRef<number | null>(null);
   const endTimeRef = useRef<number>(0);
+  const remainingMsRef = useRef<number>(remainingMs);
+  remainingMsRef.current = remainingMs;
   const lastSecondTickedRef = useRef<number | null>(null);
 
   const handleSliderChange = (newMinutes: number) => {
@@ -25,6 +28,7 @@ export const TimerSimple: React.FC<TimerSimpleProps> = ({ isNight, t }) => {
     const ms = newMinutes * 60 * 1000;
     setTotalDurationMs(ms);
     setRemainingMs(ms);
+    remainingMsRef.current = ms;
     setIsRunning(false);
     setIsCompleted(false);
     lastSecondTickedRef.current = null;
@@ -32,11 +36,12 @@ export const TimerSimple: React.FC<TimerSimpleProps> = ({ isNight, t }) => {
 
   useEffect(() => {
     if (isRunning) {
-      endTimeRef.current = performance.now() + remainingMs;
+      endTimeRef.current = performance.now() + remainingMsRef.current;
 
       const tick = () => {
         const now = performance.now();
         const diff = Math.max(0, endTimeRef.current - now);
+        remainingMsRef.current = diff;
         setRemainingMs(diff);
 
         const currentWholeSeconds = Math.ceil(diff / 1000);
@@ -54,6 +59,7 @@ export const TimerSimple: React.FC<TimerSimpleProps> = ({ isNight, t }) => {
           setIsCompleted(true);
           soundEffects.playChimeBell();
           if (requestRef.current) cancelAnimationFrame(requestRef.current);
+          if (intervalRef.current) clearInterval(intervalRef.current);
           return;
         }
 
@@ -61,18 +67,19 @@ export const TimerSimple: React.FC<TimerSimpleProps> = ({ isNight, t }) => {
       };
 
       requestRef.current = requestAnimationFrame(tick);
+      // Fallback interval for background tabs to keep ticking and updating document.title every second!
+      intervalRef.current = window.setInterval(tick, 250);
     } else {
-      if (requestRef.current) {
-        cancelAnimationFrame(requestRef.current);
-      }
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     }
 
     return () => {
-      if (requestRef.current) {
-        cancelAnimationFrame(requestRef.current);
-      }
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isRunning, remainingMs]);
+  }, [isRunning]);
+
 
   const handleStartPause = () => {
     if (remainingMs <= 0) {
