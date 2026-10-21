@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Flag, Trash2, Award } from 'lucide-react';
 import { LapRecord } from '../types';
+import { soundEffects } from '../services/soundEffects';
 import { Translations } from '../locales/translations';
 
 interface StopwatchProps {
@@ -17,44 +18,71 @@ export const Stopwatch: React.FC<StopwatchProps> = ({ isNight, t }) => {
   const intervalRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const pausedElapsedRef = useRef<number>(0);
+  const isRunningRef = useRef<boolean>(false);
+
+  const stopTimerLoops = () => {
+    if (requestRef.current !== null) {
+      cancelAnimationFrame(requestRef.current);
+      requestRef.current = null;
+    }
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  };
 
   useEffect(() => {
-    if (isRunning) {
-      startTimeRef.current = performance.now() - pausedElapsedRef.current;
-
-      const update = () => {
-        const now = performance.now();
-        const elapsed = now - startTimeRef.current;
-        pausedElapsedRef.current = elapsed;
-        setElapsedTime(elapsed);
-        requestRef.current = requestAnimationFrame(update);
-      };
-
-      requestRef.current = requestAnimationFrame(update);
-
-      // Runs in background tabs when requestAnimationFrame is throttled/paused by the browser
-      intervalRef.current = window.setInterval(() => {
-        const now = performance.now();
-        const elapsed = now - startTimeRef.current;
-        pausedElapsedRef.current = elapsed;
-        setElapsedTime(elapsed);
-      }, 250);
-    } else {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      if (intervalRef.current) clearInterval(intervalRef.current);
+    if (!isRunning) {
+      stopTimerLoops();
+      isRunningRef.current = false;
+      return;
     }
 
+    isRunningRef.current = true;
+    startTimeRef.current = performance.now() - pausedElapsedRef.current;
+
+    const update = () => {
+      if (!isRunningRef.current) return;
+      const now = performance.now();
+      const elapsed = now - startTimeRef.current;
+      pausedElapsedRef.current = elapsed;
+      setElapsedTime(elapsed);
+      requestRef.current = requestAnimationFrame(update);
+    };
+
+    requestRef.current = requestAnimationFrame(update);
+    intervalRef.current = window.setInterval(() => {
+      if (!isRunningRef.current) return;
+      const now = performance.now();
+      const elapsed = now - startTimeRef.current;
+      pausedElapsedRef.current = elapsed;
+      setElapsedTime(elapsed);
+    }, 200);
+
     return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      stopTimerLoops();
     };
   }, [isRunning]);
 
   const handleStartPause = () => {
-    setIsRunning(!isRunning);
+    soundEffects.resumeContext();
+    if (isRunning) {
+      stopTimerLoops();
+      isRunningRef.current = false;
+      setIsRunning(false);
+      pausedElapsedRef.current = performance.now() - startTimeRef.current;
+      setElapsedTime(pausedElapsedRef.current);
+    } else {
+      startTimeRef.current = performance.now() - pausedElapsedRef.current;
+      isRunningRef.current = true;
+      setIsRunning(true);
+    }
   };
 
   const handleReset = () => {
+    soundEffects.resumeContext();
+    stopTimerLoops();
+    isRunningRef.current = false;
     setIsRunning(false);
     pausedElapsedRef.current = 0;
     setElapsedTime(0);
